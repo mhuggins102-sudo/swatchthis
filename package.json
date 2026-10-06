@@ -1,0 +1,13 @@
+{
+  "name": "gem-grid",
+  "version": "0.1.0",
+  "description": "Gem Grid: a one-thumb card-driven grid puzzle. Vanilla ES modules, no build step.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "sim": "node sim/run.js",
+    "serve": "node sim/serve.js"
+  },
+  "engines": { "node": ">=20" }
+}

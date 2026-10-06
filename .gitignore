@@ -1,0 +1,5 @@
+node_modules/
+sim/results/**/*.json
+sim/results/**/*.log
+sim/results/**/*.err
+.DS_Store

@@ -1,0 +1,191 @@
+/* Gem Grid: grey-box layout. Portrait phone, one thumb, 390x844 baseline,
+   works down to 360px wide. Desktop centers the same column. */
+
+:root {
+  --bg-top: #1b1f3a;
+  --bg-bottom: #2b3140;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel-strong: rgba(255, 255, 255, 0.12);
+  --text: #e8e9f0;
+  --muted: #a9adbf;
+  --accent: #ffd36e;
+  --cell: #2f3550;
+  --cell-dim: #262a3e;
+  --radius: 12px;
+  --gutter: 16px;
+  --c0: #e0434f; /* ruby */
+  --c1: #3f7ee8; /* sapphire */
+  --c2: #3cb371; /* emerald */
+  --c3: #f0a830; /* topaz */
+  --c4: #9b5de5; /* amethyst */
+  --c5: #8fd8d2; /* opal */
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)) fixed;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; }
+
+.app {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.hidden { display: none !important; }
+
+/* ---------- start screen */
+.start { padding: 40px var(--gutter); align-items: stretch; justify-content: center; gap: 12px; }
+.start h1 { margin: 0; font-size: 36px; text-align: center; letter-spacing: 0.5px; }
+.tagline { margin: 0 0 16px; text-align: center; color: var(--muted); }
+.tier-list { display: flex; flex-direction: column; gap: 10px; }
+.tier-btn {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 18px; border: 0; border-radius: var(--radius);
+  background: var(--panel-strong); cursor: pointer; min-height: 64px;
+}
+.tier-btn:active { background: rgba(255,255,255,0.2); }
+.tier-btn .name { font-size: 20px; font-weight: 600; }
+.tier-btn .meta { font-size: 13px; color: var(--muted); text-align: right; line-height: 1.3; }
+.hint { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+.seed-row { display: flex; gap: 8px; margin-top: 12px; }
+.seed-row input { flex: 1; min-width: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--panel-strong); background: var(--panel); color: var(--text); }
+.seed-row button { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--panel-strong); }
+
+/* ---------- header */
+.hdr {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px var(--gutter) 4px; min-height: 48px;
+}
+.hdr-btn {
+  width: 40px; height: 40px; border: 0; border-radius: 10px;
+  background: var(--panel); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.hdr-info { flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.hdr-tier { font-weight: 600; font-size: 15px; }
+.hdr-cards, .hdr-par { font-size: 12px; color: var(--muted); }
+
+/* ---------- grid */
+.grid-wrap { padding: 6px var(--gutter); }
+.grid {
+  display: grid; gap: 4px; width: 100%; aspect-ratio: 1 / 1;
+  padding: 6px; border-radius: 16px; background: var(--panel);
+}
+.cell {
+  position: relative; border: 0; border-radius: 10px; background: var(--cell);
+  padding: 0; cursor: pointer; min-width: 0; min-height: 0;
+  transition: opacity 150ms, box-shadow 150ms, background 150ms;
+}
+.cell svg { width: 70%; height: 70%; display: block; margin: auto; }
+.cell.legal { box-shadow: 0 0 0 2px rgba(255, 211, 110, 0.75); }
+.cell.dim { opacity: 0.35; }
+.cell.selected { background: #4a5178; box-shadow: 0 0 0 3px var(--accent); }
+.cell.ghost svg { opacity: 0.55; }
+.cell.ghost { background: repeating-linear-gradient(45deg, var(--cell), var(--cell) 4px, #3b4263 4px, #3b4263 8px); }
+.cell.risk::after {
+  content: "?"; position: absolute; right: 4px; top: 2px; font-size: 12px; font-weight: 700; color: var(--accent);
+}
+.cell.won { box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+.cell .fill-0 { fill: var(--c0); } .cell .fill-1 { fill: var(--c1); } .cell .fill-2 { fill: var(--c2); }
+.cell .fill-3 { fill: var(--c3); } .cell .fill-4 { fill: var(--c4); } .cell .fill-5 { fill: var(--c5); }
+.fill-0 { fill: var(--c0); } .fill-1 { fill: var(--c1); } .fill-2 { fill: var(--c2); }
+.fill-3 { fill: var(--c3); } .fill-4 { fill: var(--c4); } .fill-5 { fill: var(--c5); }
+
+/* ---------- action strip */
+.strip {
+  margin: 4px var(--gutter); padding: 10px 12px; min-height: 108px;
+  border-radius: var(--radius); background: var(--panel);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.strip-title { font-weight: 600; font-size: 15px; }
+.strip-text { font-size: 13px; color: var(--muted); line-height: 1.3; }
+.strip-text.warn { color: var(--accent); }
+.strip-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pick {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; min-width: 44px; padding: 6px 10px; border: 0; border-radius: 10px;
+  background: var(--panel-strong); cursor: pointer; font-size: 13px;
+}
+.pick svg { width: 24px; height: 24px; }
+.pick.active { box-shadow: 0 0 0 2px var(--accent); }
+.strip-actions { display: flex; gap: 8px; margin-top: auto; }
+.strip-actions button {
+  flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: var(--panel-strong); cursor: pointer; font-weight: 600;
+}
+.strip-actions button.primary { background: var(--accent); color: #1b1f3a; }
+.strip-actions button:disabled { opacity: 0.35; cursor: default; }
+
+/* ---------- hand */
+.hand {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+  padding: 4px var(--gutter) 12px; margin-top: auto;
+}
+.hand.cols-6 { grid-template-columns: repeat(6, 1fr); }
+.card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-height: 64px; padding: 6px 2px; border: 0; border-radius: 10px;
+  background: var(--panel-strong); cursor: pointer; font-size: 11px; line-height: 1.1; text-align: center;
+}
+.card .icon { font-size: 20px; line-height: 1; }
+.card .icon svg { width: 16px; height: 16px; vertical-align: -2px; }
+.card.luck { background: rgba(255, 211, 110, 0.18); }
+.card.selected { box-shadow: 0 0 0 2px var(--accent); background: #4a5178; }
+.card.played { opacity: 0.25; cursor: default; }
+.card.unplayable { opacity: 0.5; }
+.card .name { max-width: 100%; overflow: hidden; }
+
+/* ---------- overlay */
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 12, 24, 0.7); padding: var(--gutter); z-index: 10;
+}
+.dialog {
+  width: 100%; max-width: 360px; padding: 22px 20px; border-radius: 18px;
+  background: #272c47; display: flex; flex-direction: column; gap: 12px; text-align: center;
+}
+.dialog h2 { margin: 0; font-size: 24px; }
+.dialog p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.dialog .stars { font-size: 40px; letter-spacing: 4px; color: var(--accent); }
+.dialog .stars .off { opacity: 0.25; }
+.dialog button {
+  min-height: 46px; border: 0; border-radius: 10px; background: var(--panel-strong); cursor: pointer; font-weight: 600;
+}
+.dialog button.primary { background: var(--accent); color: #1b1f3a; }
+.dialog .row { display: flex; gap: 8px; }
+.dialog .row button { flex: 1; }
+.dialog label { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.dialog .small { font-size: 12px; }
+.dialog .seed { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  padding: 10px 14px; border-radius: 10px; background: #0f1222; color: var(--text); font-size: 13px; z-index: 20;
+  max-width: 90vw;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* Short phones: tighten vertical spacing so the hand stays on screen. */
+@media (max-height: 700px) {
+  .hdr { min-height: 42px; padding-top: 4px; }
+  .hdr-btn { width: 36px; height: 36px; }
+  .grid-wrap { padding: 2px var(--gutter); }
+  .grid { padding: 4px; gap: 3px; }
+  .strip { min-height: 92px; margin: 2px var(--gutter); padding: 8px 10px; gap: 6px; }
+  .hand { padding-bottom: 6px; gap: 4px; }
+  .card { min-height: 54px; padding: 4px 2px; }
+  .card .icon { font-size: 17px; }
+}
