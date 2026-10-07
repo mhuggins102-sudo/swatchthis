@@ -1,7 +1,7 @@
 // Service worker: precache the app shell so the game loads and plays offline
 // after the first visit, with no network requests during play. Bump VERSION
 // whenever any shipped file changes so clients pick up the new build.
-const VERSION = 'gemgrid-v1';
+const VERSION = 'gemgrid-v2';
 const SHELL = [
   './', './index.html', './css/style.css',
   './js/ui.js', './js/engine.js', './js/cards.js', './js/grid.js', './js/rng.js',

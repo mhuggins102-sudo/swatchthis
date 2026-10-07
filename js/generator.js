@@ -30,11 +30,11 @@ export function buildCandidate(tier, seed, opts = {}) {
   const decoyCount = handSize - k - luckCount;
   if (decoyCount < 0) throw new Error('hand is smaller than k plus luck cards');
 
-  // 1. Walk backward from a uniform board.
+  // 1. Walk backward from a uniform board. No card type repeats within a hand.
   let grid = uniformGrid(size, rng.int(colors));
   const steps = []; // in construction order (last step = first move of the solution)
   for (let s = 0; s < k; s++) {
-    let pool = weightedPool(cardWeights, DETERMINISTIC_IDS);
+    let pool = weightedPool(cardWeights, DETERMINISTIC_IDS).filter(([id]) => !steps.some((st) => st.type === id));
     if (countType(steps, 'transmute') >= maxTransmutes) pool = pool.filter(([id]) => id !== 'transmute');
     let done = false;
     while (pool.length && !done) {
@@ -72,16 +72,31 @@ export function buildCandidate(tier, seed, opts = {}) {
   });
   const hand = solutionInsts.slice();
   const startColors = colorsPresent(grid, colors);
+  // Decoys never repeat a type already in the hand, with one allowed
+  // exception: a single pair of the same color card where one copy is wild
+  // and the other is locked.
+  let repeats = 0;
+  const maxRepeats = tier.maxRepeats ?? 1;
   for (let d = 0; d < decoyCount; d++) {
-    let pool = weightedPool(cardWeights, DETERMINISTIC_IDS);
+    const inHand = (id) => hand.some((c) => c.type === id);
+    let pool = weightedPool(cardWeights, DETERMINISTIC_IDS).filter(([id]) =>
+      !inHand(id) || (repeats < maxRepeats && cardDef(id).lockParam && hand.filter((c) => c.type === id).length === 1));
     if (countType(hand, 'transmute') >= maxTransmutes) pool = pool.filter(([id]) => id !== 'transmute');
+    if (!pool.length) return { puzzle: null, reason: 'no_decoy' };
     const type = rng.weighted(pool);
     const def = cardDef(type);
-    const lockedColor = def.lockParam && rng.chance(lockedRatio) ? rng.pick(startColors) : null;
+    let lockedColor = def.lockParam && rng.chance(lockedRatio) ? rng.pick(startColors) : null;
+    if (inHand(type)) {
+      // The repeat: lock whichever copy is not locked yet.
+      const twin = hand.find((c) => c.type === type);
+      lockedColor = twin.lockedColor == null ? rng.pick(startColors) : null;
+      repeats++;
+    }
     hand.push(makeInst(type, lockedColor));
   }
   for (let l = 0; l < luckCount; l++) {
-    const type = rng.weighted(weightedPool(luckWeights, LUCK_IDS));
+    const pool = weightedPool(luckWeights, LUCK_IDS).filter(([id]) => !hand.some((c) => c.type === id));
+    const type = rng.weighted(pool);
     const def = cardDef(type);
     const lockedColor = def.lockParam && rng.chance(lockedRatio) ? rng.pick(startColors) : null;
     hand.push(makeInst(type, lockedColor));
@@ -118,7 +133,7 @@ export function buildCandidate(tier, seed, opts = {}) {
 // Generate a verified puzzle for a tier from a seed, retrying sub-seeds until
 // one passes. Returns { puzzle, attempts, rejections, ms }.
 export function generatePuzzle(tier, seed, opts = {}) {
-  const maxAttempts = opts.maxAttempts ?? 200;
+  const maxAttempts = opts.maxAttempts ?? 3000;
   const rejections = {};
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

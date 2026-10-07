@@ -1,5 +1,7 @@
 # Tuning
 
+Round 2 (after the first playtest) is at the end of this file; round 1 follows for the record.
+
 Results of the simulation harness (`sim/run.js`) and the configurations
 chosen for the three tiers. Bots measure challenge, not fun; the human
 playtest checkpoints cover fun.
@@ -310,3 +312,203 @@ the uniqueness of the solution.
 Easy is deliberately outside the medium bands. Medium and hard meet the win
 rate bands and miss the Greedy 3-star target for the reason given under
 "What the sweep says", point 6.
+
+---
+
+# Round 2: after the first playtest
+
+Changes before this round: 8 new cards (Group Paint, Corners, Row Mirror,
+Column Mirror, Minority Rule, Cross, Purge, Quadrants), Slide moves any
+number of steps, Color Swap swaps two groups instead of two colors, Spread is
+limited to groups of 8 or fewer, any palette color can be chosen for a paint,
+no card type repeats in a hand (one wild/locked pair allowed), and Hard deals
+10 cards like the other tiers.
+
+The new goal from the playtest: no 4-card pars; easy around 6; on medium and
+hard a good player should need 7 to 8 cards with a real chance of losing. Par
+is now shown as cards played (the solver's shortest win).
+
+## Round 2 sweep (300 puzzles each)
+
+| Config | k | Solver gap | Par (cards) | Greedy win | Lookahead win | Gen ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| easy-p6 (**chosen easy**) | 6 | ≤ 1 | 5.2 | 64% | 90% | 154 |
+| easy-p6b | 6 | ≤ 2 | 4.4 | 62% | 95% | 55 |
+| easy-p7 | 7 | ≤ 1 | 6.1 | 34% | 70% | 1118 |
+| med-p8 (**chosen medium**) | 8 | ≤ 1 | 7.4 | 24% | 61% | 4651 |
+| med-p8b | 8 | ≤ 2 | 6.1 | 31% | 73% | 513 |
+| med-p9 | 9 | ≤ 2 | 7.3 | 17% | 61% | 4830 |
+| hard-p9 (gap ≤ 1) | 9 | ≤ 1 | aborted: about 11 s per puzzle | | | |
+
+Hard was set to k 9 with gap ≤ 2 without a separate sweep; the final run
+below is its measurement.
+
+## Chosen tiers
+
+| Tier | Grid | Colors | Hand | k | Luck | Max Transmutes | Locked ratio | Solver gap |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Easy | 5x5 | 4 | 10 | 6 | 1 | 1 | 0.30 | ≤ 1 |
+| Medium | 5x5 | 5 | 10 | 8 | 1 | 1 | 0.30 | ≤ 1 |
+| Hard | 6x6 | 6 | 10 | 9 | 1 | 2 | 0.35 | ≤ 2 |
+
+## Round 2 final run (1,000 puzzles per tier)
+
+| Tier | Par (cards) | Greedy win | Greedy 3★ | Lookahead win | Lookahead 3★ | Solver | Gen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Easy | 5.1 | 61% | 26% | 89% | 65% | 100% | 166 |
+| Medium | 7.4 | 20% | 12% | 60% | 53% | 100% | 4812 |
+| Hard | 7.2 | 15% | 11% | 48% | 35% | 100% | 1566 |
+
+Findings:
+
+1. Pars now sit where asked: easy 5 to 6, medium 7 to 8, hard 7 to 9. A
+   thoughtful player (Lookahead) loses 40% of medium and 52% of hard puzzles.
+   Hard may be a step too far; moving its gap to ≤ 1 would push par to 8 to 9
+   at about 11 s of generation per puzzle.
+2. Without the luck card, Greedy wins 7% of medium and 1% of hard puzzles. On
+   easy the luck card is worth +0.6 stars to Greedy.
+3. New cards that work: Cross, Minority Rule, Purge, Corners and Group Paint
+   all appear in 84 to 100% of solver wins when dealt. Color Swap as a
+   group swap went from 8% to 92% of solver wins on hard. Slide with any
+   number of steps went from 6% to 30%. Trade is at 55%.
+4. Still weak: Row Mirror and Column Mirror (5 to 8% of solver wins on hard),
+   Tumble (5 to 14% of Lookahead wins) and Quadrants (3 to 8%).
+5. Mirror is almost never dealt on hard (1.9%): its inverse needs a symmetric
+   board and the tight gap rule rejects most hands that contain it.
+6. Medium generation costs 4.8 s per puzzle (99.5% of candidates rejected),
+   so the seed pack is now the only practical source on a phone.
+
+### easy (n=1000)
+
+Grid 5x5, 4 colors, hand 10, k 6, luck [1,1], max Transmutes 1, locked ratio 0.3, greedy shortcut 0
+
+| Bot | Win rate | 0★ | 1★ | 2★ | 3★ | Mean stars | Mean cards played | ms/puzzle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| random | 0.4% | 99.6% | 0.3% | 0.1% | 0.0% | 0.01 | 10.0 | 1 |
+| greedy | 61.2% | 38.8% | 11.0% | 24.2% | 26.0% | 1.37 | 7.5 | 2 |
+| greedyDet | 42.7% | 57.3% | 11.6% | 30.3% | 0.8% | 0.75 | 7.9 | 1 |
+| lookahead | 89.0% | 11.0% | 1.5% | 22.1% | 65.4% | 2.42 | 5.7 | 35 |
+| lookaheadDet | 82.7% | 17.3% | 0.9% | 25.2% | 56.6% | 2.21 | 6.0 | 10 |
+| solver | 100.0% | 0.0% | 0.0% | 0.0% | 100.0% | 3.00 | 5.1 | 51 |
+
+Greedy trap rate 38.8% · for Greedy +0.63 stars · for Lookahead +0.21 stars · winning lines found (capped) 22.1 · shortest win 5.12 cards (constructed k 6.0, par 4.88 left)
+
+Generation: 24.4 attempts/puzzle (rejection 95.9%: greedy_shortcut 14099, big_share 6881, solver_shortcut 2377, unverified 46, few_colors 4), 166 ms mean, 1826 ms max, 2.2 locked cards/hand
+
+| Card | Dealt in | In lookahead wins (of dealt) | In solver wins (of dealt) | Used when lookahead won | Used when solver won |
+| --- | --- | --- | --- | --- | --- |
+| rowPaint | 55.2% | 62.9% | 75.9% | 69.7% | 75.9% |
+| colPaint | 55.4% | 62.1% | 80.9% | 71.2% | 80.9% |
+| diagPaint | 59.3% | 59.0% | 75.7% | 66.7% | 75.7% |
+| transmute | 10.1% | 88.1% | 96.0% | 96.7% | 96.0% |
+| colorSwap | 39.1% | 67.5% | 76.2% | 73.7% | 76.2% |
+| flood | 46.2% | 75.8% | 82.7% | 83.1% | 82.7% |
+| spread | 10.2% | 58.8% | 82.4% | 66.7% | 82.4% |
+| stamp | 69.1% | 65.3% | 83.6% | 72.6% | 83.6% |
+| majority | 50.4% | 75.4% | 89.3% | 84.4% | 89.3% |
+| slide | 57.2% | 11.0% | 7.5% | 12.5% | 7.5% |
+| trade | 51.2% | 26.4% | 14.8% | 29.7% | 14.8% |
+| mirror | 5.8% | 86.2% | 94.8% | 92.6% | 94.8% |
+| groupPaint | 55.5% | 40.2% | 50.1% | 45.0% | 50.1% |
+| corners | 49.3% | 36.9% | 50.1% | 42.0% | 50.1% |
+| rowMirror | 44.3% | 2.9% | 2.0% | 3.3% | 2.0% |
+| colMirror | 44.7% | 2.7% | 1.6% | 3.2% | 1.6% |
+| minority | 57.5% | 49.2% | 68.9% | 54.4% | 68.9% |
+| cross | 61.5% | 72.7% | 88.9% | 82.0% | 88.9% |
+| purge | 9.9% | 90.9% | 97.0% | 98.9% | 97.0% |
+| scatter | 23.2% | 73.3% | 0.0% | 78.7% | 0.0% |
+| wildTransmute | 19.5% | 96.9% | 0.0% | 100.0% | 0.0% |
+| luckyLine | 17.2% | 17.4% | 0.0% | 20.7% | 0.0% |
+| tumble | 19.4% | 5.7% | 0.0% | 6.7% | 0.0% |
+| quadrants | 20.7% | 5.8% | 0.0% | 6.8% | 0.0% |
+
+### medium (n=1000)
+
+Grid 5x5, 5 colors, hand 10, k 8, luck [1,1], max Transmutes 1, locked ratio 0.3, greedy shortcut 0
+
+| Bot | Win rate | 0★ | 1★ | 2★ | 3★ | Mean stars | Mean cards played | ms/puzzle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| random | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% | 0.00 | 10.0 | 1 |
+| greedy | 20.2% | 79.8% | 5.6% | 2.2% | 12.4% | 0.47 | 9.1 | 2 |
+| greedyDet | 7.1% | 92.9% | 1.4% | 2.2% | 3.5% | 0.16 | 8.6 | 1 |
+| lookahead | 60.3% | 39.7% | 1.5% | 5.6% | 53.2% | 1.72 | 7.7 | 37 |
+| lookaheadDet | 45.4% | 54.6% | 0.1% | 3.4% | 41.9% | 1.33 | 7.7 | 10 |
+| solver | 100.0% | 0.0% | 0.0% | 0.0% | 100.0% | 3.00 | 7.4 | 62 |
+
+Greedy trap rate 79.8% · for Greedy +0.31 stars · for Lookahead +0.40 stars · winning lines found (capped) 7.7 · shortest win 7.40 cards (constructed k 8.0, par 2.60 left)
+
+Generation: 216.1 attempts/puzzle (rejection 99.5%: greedy_shortcut 118065, solver_shortcut 76381, big_share 16255, unverified 4297, no_inverse 25, few_colors 116), 4812 ms mean, 27404 ms max, 2.1 locked cards/hand
+
+| Card | Dealt in | In lookahead wins (of dealt) | In solver wins (of dealt) | Used when lookahead won | Used when solver won |
+| --- | --- | --- | --- | --- | --- |
+| rowPaint | 42.2% | 51.9% | 96.9% | 85.9% | 96.9% |
+| colPaint | 36.6% | 52.5% | 97.0% | 86.5% | 97.0% |
+| diagPaint | 53.9% | 50.1% | 96.5% | 85.2% | 96.5% |
+| transmute | 10.1% | 69.3% | 96.0% | 94.6% | 96.0% |
+| colorSwap | 50.6% | 51.2% | 96.2% | 81.7% | 96.2% |
+| flood | 62.1% | 49.3% | 90.2% | 80.3% | 90.2% |
+| spread | 7.5% | 58.7% | 100.0% | 88.0% | 100.0% |
+| stamp | 62.5% | 51.4% | 97.9% | 85.6% | 97.9% |
+| majority | 36.9% | 56.9% | 100.0% | 95.0% | 100.0% |
+| slide | 79.3% | 22.1% | 69.4% | 36.5% | 69.4% |
+| trade | 65.3% | 42.4% | 85.9% | 67.2% | 85.9% |
+| mirror | 3.5% | 74.3% | 100.0% | 100.0% | 100.0% |
+| groupPaint | 72.6% | 37.7% | 89.8% | 61.6% | 89.8% |
+| corners | 58.7% | 37.1% | 96.3% | 67.1% | 96.3% |
+| rowMirror | 58.3% | 2.6% | 23.3% | 4.5% | 23.3% |
+| colMirror | 59.2% | 2.5% | 25.7% | 4.3% | 25.7% |
+| minority | 41.7% | 52.8% | 97.1% | 88.4% | 97.1% |
+| cross | 53.0% | 55.5% | 97.7% | 91.0% | 97.7% |
+| purge | 5.7% | 70.2% | 100.0% | 100.0% | 100.0% |
+| scatter | 17.0% | 67.6% | 0.0% | 97.5% | 0.0% |
+| wildTransmute | 18.2% | 79.1% | 0.0% | 98.0% | 0.0% |
+| luckyLine | 20.3% | 26.1% | 0.0% | 53.5% | 0.0% |
+| tumble | 22.7% | 5.7% | 0.0% | 10.9% | 0.0% |
+| quadrants | 21.8% | 7.8% | 0.0% | 14.2% | 0.0% |
+
+### hard (n=1000)
+
+Grid 6x6, 6 colors, hand 10, k 9, luck [1,1], max Transmutes 2, locked ratio 0.35, greedy shortcut 0
+
+| Bot | Win rate | 0★ | 1★ | 2★ | 3★ | Mean stars | Mean cards played | ms/puzzle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| random | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% | 0.00 | 10.0 | 2 |
+| greedy | 14.8% | 85.2% | 2.6% | 1.6% | 10.6% | 0.38 | 9.3 | 5 |
+| greedyDet | 1.0% | 99.0% | 0.7% | 0.2% | 0.1% | 0.01 | 8.7 | 3 |
+| lookahead | 47.7% | 52.3% | 3.9% | 9.1% | 34.7% | 1.26 | 8.5 | 105 |
+| lookaheadDet | 34.5% | 65.5% | 0.9% | 6.6% | 27.0% | 0.95 | 8.2 | 27 |
+| solver | 100.0% | 0.0% | 0.0% | 0.0% | 100.0% | 3.00 | 7.2 | 196 |
+
+Greedy trap rate 85.2% · for Greedy +0.36 stars · for Lookahead +0.31 stars · winning lines found (capped) 9.2 · shortest win 7.16 cards (constructed k 9.0, par 2.84 left)
+
+Generation: 11.6 attempts/puzzle (rejection 91.4%: unverified 2588, solver_shortcut 4584, big_share 1231, greedy_shortcut 2167, few_colors 18, no_inverse 2), 1566 ms mean, 9951 ms max, 1.7 locked cards/hand
+
+| Card | Dealt in | In lookahead wins (of dealt) | In solver wins (of dealt) | Used when lookahead won | Used when solver won |
+| --- | --- | --- | --- | --- | --- |
+| rowPaint | 35.9% | 47.1% | 97.8% | 93.4% | 97.8% |
+| colPaint | 39.4% | 43.9% | 98.0% | 90.6% | 98.0% |
+| diagPaint | 61.4% | 40.2% | 96.7% | 86.1% | 96.7% |
+| transmute | 11.3% | 44.2% | 99.1% | 96.2% | 99.1% |
+| colorSwap | 62.5% | 40.0% | 91.7% | 81.2% | 91.7% |
+| flood | 78.3% | 42.1% | 93.0% | 88.0% | 93.0% |
+| spread | 30.1% | 46.5% | 99.3% | 90.3% | 99.3% |
+| stamp | 79.5% | 43.5% | 98.4% | 89.2% | 98.4% |
+| majority | 54.0% | 47.6% | 99.8% | 98.1% | 99.8% |
+| slide | 61.8% | 16.0% | 30.4% | 33.2% | 30.4% |
+| trade | 54.2% | 24.5% | 55.2% | 49.3% | 55.2% |
+| mirror | 1.9% | 47.4% | 100.0% | 100.0% | 100.0% |
+| groupPaint | 59.7% | 27.5% | 83.8% | 61.4% | 83.8% |
+| corners | 36.0% | 30.6% | 88.3% | 67.1% | 88.3% |
+| rowMirror | 45.1% | 2.2% | 5.3% | 5.1% | 5.3% |
+| colMirror | 45.6% | 1.8% | 7.9% | 4.0% | 7.9% |
+| minority | 53.2% | 40.2% | 98.9% | 86.6% | 98.9% |
+| cross | 72.7% | 46.2% | 98.1% | 93.3% | 98.1% |
+| purge | 17.4% | 47.1% | 100.0% | 100.0% | 100.0% |
+| scatter | 20.3% | 56.2% | 0.0% | 91.2% | 0.0% |
+| wildTransmute | 21.0% | 59.5% | 0.0% | 99.2% | 0.0% |
+| luckyLine | 22.3% | 11.7% | 0.0% | 28.6% | 0.0% |
+| tumble | 18.3% | 4.9% | 0.0% | 14.1% | 0.0% |
+| quadrants | 18.1% | 3.3% | 0.0% | 8.5% | 0.0% |
+
+
+

@@ -49,6 +49,21 @@ The seed pack must be rebuilt whenever `js/tiers.js`, `js/generator.js`,
 from its seed and trusts the par stored in the pack. `npm test` checks a sample
 of the pack against the solver.
 
+## Cards
+
+Deterministic (19): Row Paint, Column Paint, Diagonal Paint, Transmute,
+Color Swap (two groups trade colors), Flood, Spread (groups of up to 8),
+Stamp, Majority Rule, Minority Rule, Slide (any number of steps), Trade,
+Mirror, Row Mirror, Column Mirror, Group Paint (all groups of 3, 4 or 5),
+Corners, Cross, Purge (rarest color becomes the most common).
+
+Luck (5): Scatter, Wild Transmute, Lucky Line, Tumble, Quadrants.
+
+A hand never repeats a card type, except for one pair of the same color card
+where one copy is wild and the other is locked to a color. Any palette color
+may be chosen for a paint, even one no longer on the board; only luck cards'
+random results are limited to colors still present.
+
 ## Debugging
 
 The settings menu in the game shows the current puzzle's seed. The start

@@ -11,23 +11,29 @@
 // parameters: color, color2, line, dir, axis, side.
 //
 // `inst` is the card instance in a hand: { uid, type, lockedColor }. A locked
-// card has its lockParam fixed to lockedColor and is unplayable when that
-// color has left the board.
+// card has its lockParam fixed to lockedColor. Any palette color may be
+// chosen even when it has left the board; only luck cards' random results are
+// limited to colors still present.
 
 import {
   idx, rowOf, colOf, lines, lineCells, diagonals, neighbors, colorCounts,
-  colorsPresent, groupOf, allGroups, groupsOf, fringe, halfCells, mirrorCell, blocks2x2,
-  randomConnectedSubset, isUniform,
+  colorsPresent, groupOf, groupsOf, fringe, halfCells, mirrorCell, blocks2x2,
+  randomConnectedSubset, isUniform, gridsEqual,
 } from './grid.js';
 
 const DIRS = { row: ['left', 'right'], col: ['up', 'down'] };
 
 function colorChoices(board, inst) {
-  const present = colorsPresent(board.grid, board.colors);
-  if (inst && inst.lockedColor != null) {
-    return present.includes(inst.lockedColor) ? [inst.lockedColor] : [];
-  }
-  return present;
+  if (inst && inst.lockedColor != null) return [inst.lockedColor];
+  const out = [];
+  for (let c = 0; c < board.colors; c++) out.push(c);
+  return out;
+}
+
+function allColors(board) {
+  const out = [];
+  for (let c = 0; c < board.colors; c++) out.push(c);
+  return out;
 }
 
 function paintCells(grid, cells, color) {
@@ -50,18 +56,6 @@ function randomizeCells(grid, cells, rng, colors, avoidAllOf) {
     if (avoidAllOf == null || cells.some((c) => out[c] !== avoidAllOf)) return out;
   }
   out[cells[0]] = (avoidAllOf + 1) % colors;
-  return out;
-}
-
-// After randomizing `cells` away from `color`, make sure `color` is still on
-// the board somewhere (a paint card may only choose colors that are present)
-// while leaving at least one cell in `cells` different from `color`.
-function keepColorPresent(grid, cells, color, rng) {
-  if (grid.includes(color)) return grid;
-  const out = grid.slice();
-  const differing = cells.filter((c) => out[c] !== color);
-  if (differing.length < 2) return null;
-  out[rng.pick(differing)] = color;
   return out;
 }
 
@@ -107,7 +101,7 @@ function makeLinePaint(id, name, kind) {
       if (!candidates.length) return null;
       const line = rng.pick(candidates);
       const color = board.grid[line.cells[0]];
-      const grid = keepColorPresent(randomizeCells(board.grid, line.cells, rng, board.colors, color), line.cells, color, rng);
+      const grid = randomizeCells(board.grid, line.cells, rng, board.colors, color);
       if (!grid) return null;
       return { grid, target: { cells: line.cells, line: { kind, index: line.index }, color } };
     },
@@ -144,7 +138,7 @@ export const diagPaint = {
     if (!candidates.length) return null;
     const d = rng.pick(candidates);
     const color = board.grid[d.cells[0]];
-    const grid = keepColorPresent(randomizeCells(board.grid, d.cells, rng, board.colors, color), d.cells, color, rng);
+    const grid = randomizeCells(board.grid, d.cells, rng, board.colors, color);
     if (!grid) return null;
     return { grid, target: { cells: d.cells, line: { kind: d.kind, index: d.index }, color } };
   },
@@ -190,7 +184,6 @@ export const transmute = {
     const from = rng.pick(absent);
     const toCells = cellsOfColor(board.grid, to);
     // Recolor a random non-empty subset of the `to` cells back to `from`.
-    // At least one `to` cell must survive so `to` is still on the board.
     if (toCells.length < 2) return null;
     const grid = board.grid.slice();
     let moved = 0;
@@ -210,42 +203,49 @@ function cellsOfColor(grid, color) {
   return out;
 }
 
-// ---------------------------------------------------------------- color swap
+// ---------------------------------------------------------------- color swap (two groups)
 
 export const colorSwap = {
   id: 'colorSwap',
   name: 'Color Swap',
-  text: 'Two colors trade places everywhere on the board.',
+  text: 'Two groups of different colors trade colors.',
   isLuck: false,
   lockParam: null,
   targets(board) {
-    const present = colorsPresent(board.grid, board.colors);
+    const groups = groupsOf(board);
     const out = [];
-    for (const a of present) {
-      const cells = cellsOfColor(board.grid, a);
-      for (const b of present) if (a !== b) out.push({ cells, color: a, color2: b });
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        if (board.grid[groups[i][0]] === board.grid[groups[j][0]]) continue;
+        out.push({ cells: groups[i].concat(groups[j]).sort((a, b) => a - b), cellsA: groups[i], cellsB: groups[j] });
+      }
     }
     return out;
   },
   apply(board, target) {
     const out = board.grid.slice();
-    for (let i = 0; i < out.length; i++) {
-      if (out[i] === target.color) out[i] = target.color2;
-      else if (out[i] === target.color2) out[i] = target.color;
-    }
+    const a = board.grid[target.cellsA[0]];
+    const b = board.grid[target.cellsB[0]];
+    for (const c of target.cellsA) out[c] = b;
+    for (const c of target.cellsB) out[c] = a;
     return out;
   },
   invert(board, rng) {
-    const present = colorsPresent(board.grid, board.colors);
-    if (present.length < 2) return null;
-    const a = rng.pick(present);
-    const b = rng.pick(present.filter((c) => c !== a));
-    const target = { cells: null, color: a, color2: b };
-    const grid = colorSwap.apply(board, target);
-    return { grid, target: { cells: cellsOfColor(grid, a), color: a, color2: b } };
+    const targets = colorSwap.targets(board);
+    if (!targets.length) return null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const t = rng.pick(targets);
+      const grid = colorSwap.apply(board, t);
+      // Both groups must still be whole groups in the predecessor.
+      const gA = groupOf(grid, board.size, t.cellsA[0]);
+      const gB = groupOf(grid, board.size, t.cellsB[0]);
+      if (gA.length !== t.cellsA.length || gB.length !== t.cellsB.length) continue;
+      return { grid, target: { cells: t.cells, cellsA: gA, cellsB: gB } };
+    }
+    return null;
   },
   label(target, board) {
-    return `${colorName(board, target.color)} ⇄ ${colorName(board, target.color2)}`;
+    return `${colorName(board, board.grid[target.cellsA[0]])} group of ${target.cellsA.length} ⇄ ${colorName(board, board.grid[target.cellsB[0]])} group of ${target.cellsB.length}`;
   },
 };
 
@@ -269,17 +269,14 @@ export const flood = {
     return paintCells(board.grid, target.cells, target.color);
   },
   invert(board, rng, inst) {
-    const groups = allGroups(board.grid, board.size).filter(
+    const groups = groupsOf(board).filter(
       (g) => inst == null || inst.lockedColor == null || board.grid[g[0]] === inst.lockedColor,
     );
     if (!groups.length) return null;
     for (let attempt = 0; attempt < 8; attempt++) {
       const g = rng.pick(groups);
       const gColor = board.grid[g[0]];
-      const totalOfColor = cellsOfColor(board.grid, gColor).length;
-      if (totalOfColor < 2) continue;
-      // The group's color must remain on the board so the forward Flood may choose it.
-      const sub = randomConnectedSubset(board.size, g, rng, Math.min(g.length, totalOfColor - 1));
+      const sub = randomConnectedSubset(board.size, g, rng);
       // The subset must be a maximal group of its new color in the predecessor:
       // no neighbor outside the subset may share that color.
       const forbidden = new Set([gColor]);
@@ -300,21 +297,23 @@ export const flood = {
 
 // ---------------------------------------------------------------- spread
 
+export const SPREAD_MAX = 8;
+
 export const spread = {
   id: 'spread',
   name: 'Spread',
-  text: "Every gem touching a group takes the group's color.",
+  text: `Every gem touching a group of up to ${SPREAD_MAX} takes the group's color.`,
   isLuck: false,
   lockParam: null,
   targets(board) {
-    return groupsOf(board).map((g) => ({ cells: g }));
+    return groupsOf(board).filter((g) => g.length <= SPREAD_MAX).map((g) => ({ cells: g }));
   },
   apply(board, target) {
     const color = board.grid[target.cells[0]];
     return paintCells(board.grid, fringe(board.size, target.cells), color);
   },
   invert(board, rng) {
-    const groups = allGroups(board.grid, board.size);
+    const groups = groupsOf(board);
     for (let attempt = 0; attempt < 8; attempt++) {
       const h = rng.pick(groups);
       const inH = new Set(h);
@@ -322,7 +321,7 @@ export const spread = {
       const interior = h.filter((c) => neighbors(board.size, c).every((n) => inH.has(n)));
       if (!interior.length) continue;
       // Grow a connected subset of interior cells; it must leave a non-empty fringe.
-      const maxSize = Math.max(1, Math.min(interior.length, h.length - 1));
+      const maxSize = Math.max(1, Math.min(interior.length, h.length - 1, SPREAD_MAX));
       const comp = connectedComponentsWithin(board.size, interior);
       const pool = rng.pick(comp);
       const g = randomConnectedSubset(board.size, pool, rng, maxSize);
@@ -392,7 +391,7 @@ export const stamp = {
     if (!candidates.length) return null;
     const block = rng.pick(candidates);
     const color = board.grid[block[0]];
-    const grid = keepColorPresent(randomizeCells(board.grid, block, rng, board.colors, color), block, color, rng);
+    const grid = randomizeCells(board.grid, block, rng, board.colors, color);
     if (!grid) return null;
     return { grid, target: { cells: block, color } };
   },
@@ -465,45 +464,54 @@ export const majority = {
 
 // ---------------------------------------------------------------- slide
 
-function slideLine(grid, cells, dir) {
+// Shift a line by `shift` cells toward the end (right for rows, down for
+// columns), wrapping around. A shift of n - k is a shift of k the other way.
+function slideLine(grid, cells, shift) {
   const out = grid.slice();
   const n = cells.length;
-  const forward = dir === 'right' || dir === 'down';
-  for (let k = 0; k < n; k++) {
-    const from = forward ? (k - 1 + n) % n : (k + 1) % n;
-    out[cells[k]] = grid[cells[from]];
-  }
+  for (let k = 0; k < n; k++) out[cells[k]] = grid[cells[(k - shift + n) % n]];
   return out;
+}
+
+export function slideLabel(line, shift, n) {
+  const forward = shift <= n / 2;
+  const steps = forward ? shift : n - shift;
+  const arrow = line.kind === 'row' ? (forward ? '→' : '←') : (forward ? '↓' : '↑');
+  return `${arrow} ${steps}`;
 }
 
 export const slide = {
   id: 'slide',
   name: 'Slide',
-  text: 'A row or column shifts one cell; the gem that falls off wraps around.',
+  text: 'A row or column shifts any number of cells; gems that fall off wrap around.',
   isLuck: false,
   lockParam: null,
   targets(board) {
     const out = [];
-    for (const line of lines(board.size)) {
-      for (const dir of DIRS[line.kind]) out.push({ cells: line.cells, line: { kind: line.kind, index: line.index }, dir });
+    const n = board.size;
+    for (const line of lines(n)) {
+      for (let shift = 1; shift < n; shift++) out.push({ cells: line.cells, line: { kind: line.kind, index: line.index }, shift });
     }
     return out;
   },
   apply(board, target) {
-    return slideLine(board.grid, target.cells, target.dir);
+    return slideLine(board.grid, target.cells, target.shift);
   },
   invert(board, rng) {
-    const candidates = lines(board.size).filter((l) => !l.cells.every((i) => board.grid[i] === board.grid[l.cells[0]]));
+    const n = board.size;
+    const candidates = lines(n).filter((l) => !l.cells.every((i) => board.grid[i] === board.grid[l.cells[0]]));
     if (!candidates.length) return null;
-    const line = rng.pick(candidates);
-    const dir = rng.pick(DIRS[line.kind]);
-    const opposite = { left: 'right', right: 'left', up: 'down', down: 'up' }[dir];
-    const grid = slideLine(board.grid, line.cells, opposite);
-    return { grid, target: { cells: line.cells, line: { kind: line.kind, index: line.index }, dir } };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const line = rng.pick(candidates);
+      const shift = rng.range(1, n - 1);
+      const grid = slideLine(board.grid, line.cells, n - shift);
+      if (line.cells.every((i) => grid[i] === board.grid[i])) continue;
+      return { grid, target: { cells: line.cells, line: { kind: line.kind, index: line.index }, shift } };
+    }
+    return null;
   },
-  label(target) {
-    const arrow = { left: '←', right: '→', up: '↑', down: '↓' }[target.dir];
-    return `${lineName(target.line)} ${arrow}`;
+  label(target, board) {
+    return `${lineName(target.line)} ${slideLabel(target.line, target.shift, board.size)}`;
   },
 };
 
@@ -596,6 +604,275 @@ export const mirror = {
   label(target) {
     const names = { left: 'Left half', right: 'Right half', top: 'Top half', bottom: 'Bottom half' };
     return `Overwrite ${names[target.side].toLowerCase()}`;
+  },
+};
+
+// ---------------------------------------------------------------- group paint
+
+export const GROUP_SIZES = [3, 4, 5];
+
+function groupsOfSize(board, n) {
+  return groupsOf(board).filter((g) => g.length === n);
+}
+
+export const groupPaint = {
+  id: 'groupPaint',
+  name: 'Group Paint',
+  text: 'Every group of exactly 3, 4 or 5 gems (your pick) becomes the color you choose.',
+  isLuck: false,
+  lockParam: 'color',
+  targets(board, inst) {
+    const out = [];
+    for (const n of GROUP_SIZES) {
+      const gs = groupsOfSize(board, n);
+      if (!gs.length) continue;
+      const cells = gs.flat().sort((a, b) => a - b);
+      for (const color of colorChoices(board, inst)) out.push({ cells, groupSize: n, color });
+    }
+    return out;
+  },
+  apply(board, target) {
+    return paintCells(board.grid, target.cells, target.color);
+  },
+  invert(board, rng, inst) {
+    const present = colorsPresent(board.grid, board.colors).filter((c) => inst == null || inst.lockedColor == null || c === inst.lockedColor);
+    if (!present.length) return null;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const color = rng.pick(present);
+      const n = rng.pick(GROUP_SIZES);
+      const groups = groupsOf(board).filter((g) => board.grid[g[0]] === color && g.length >= n);
+      if (!groups.length) continue;
+      // Carve one or two regions of exactly n cells out of same-color groups
+      // and give each a different color.
+      const grid = board.grid.slice();
+      const regions = rng.range(1, 2);
+      let carved = 0;
+      for (let r = 0; r < regions; r++) {
+        const g = rng.pick(groups);
+        const region = randomConnectedSubset(board.size, g.filter((c) => grid[c] === color), rng, n);
+        if (region.length !== n) continue;
+        const forbidden = new Set([color]);
+        for (const f of fringe(board.size, region)) forbidden.add(grid[f]);
+        const allowed = allColors(board).filter((c) => !forbidden.has(c));
+        if (!allowed.length) continue;
+        const newColor = rng.pick(allowed);
+        for (const c of region) grid[c] = newColor;
+        carved++;
+      }
+      if (!carved) continue;
+      const pred = { size: board.size, colors: board.colors, grid };
+      const cells = groupsOfSize(pred, n).flat().sort((a, b) => a - b);
+      const target = { cells, groupSize: n, color };
+      if (gridsEqual(groupPaint.apply(pred, target), board.grid)) return { grid, target };
+    }
+    return null;
+  },
+  label(target, board) {
+    return `Groups of ${target.groupSize} → ${colorName(board, target.color)}`;
+  },
+};
+
+// ---------------------------------------------------------------- corners
+
+function cornerCells(size) {
+  return [0, size - 1, size * (size - 1), size * size - 1];
+}
+
+export const corners = {
+  id: 'corners',
+  name: 'Corners',
+  text: 'All four corner gems become the color you choose.',
+  isLuck: false,
+  lockParam: 'color',
+  targets(board, inst) {
+    const cells = cornerCells(board.size);
+    return colorChoices(board, inst).map((color) => ({ cells, color }));
+  },
+  apply(board, target) {
+    return paintCells(board.grid, target.cells, target.color);
+  },
+  invert(board, rng, inst) {
+    const cells = cornerCells(board.size);
+    const color = board.grid[cells[0]];
+    if (!cells.every((i) => board.grid[i] === color)) return null;
+    if (inst && inst.lockedColor != null && inst.lockedColor !== color) return null;
+    const grid = randomizeCells(board.grid, cells, rng, board.colors, color);
+    return { grid, target: { cells, color } };
+  },
+  label(target, board) {
+    return `Corners → ${colorName(board, target.color)}`;
+  },
+};
+
+// ---------------------------------------------------------------- row / column mirror
+
+function reverseLine(grid, cells) {
+  const out = grid.slice();
+  const n = cells.length;
+  for (let k = 0; k < n; k++) out[cells[k]] = grid[cells[n - 1 - k]];
+  return out;
+}
+
+function makeLineMirror(id, name, kind) {
+  const card = {
+    id,
+    name,
+    text: `A ${kind === 'row' ? 'row' : 'column'} is reversed end to end.`,
+    isLuck: false,
+    lockParam: null,
+    targets(board) {
+      return lines(board.size).filter((l) => l.kind === kind).map((l) => ({ cells: l.cells, line: { kind, index: l.index } }));
+    },
+    apply(board, target) {
+      return reverseLine(board.grid, target.cells);
+    },
+    invert(board, rng) {
+      const candidates = card.targets(board).filter((t) => !gridsEqual(reverseLine(board.grid, t.cells), board.grid));
+      if (!candidates.length) return null;
+      const target = rng.pick(candidates);
+      return { grid: reverseLine(board.grid, target.cells), target };
+    },
+    label(target) {
+      return `Reverse ${lineName(target.line).toLowerCase()}`;
+    },
+  };
+  return card;
+}
+
+export const rowMirror = makeLineMirror('rowMirror', 'Row Mirror', 'row');
+export const colMirror = makeLineMirror('colMirror', 'Column Mirror', 'col');
+
+// ---------------------------------------------------------------- minority rule
+
+function bottomColors(grid, cells, colors) {
+  const counts = new Array(colors).fill(0);
+  for (const i of cells) counts[grid[i]]++;
+  let least = Infinity;
+  for (const n of counts) if (n > 0 && n < least) least = n;
+  const out = [];
+  for (let c = 0; c < colors; c++) if (counts[c] === least) out.push(c);
+  return out;
+}
+
+export const minority = {
+  id: 'minority',
+  name: 'Minority Rule',
+  text: 'A row or column becomes its least common color. You break ties.',
+  isLuck: false,
+  lockParam: null,
+  targets(board) {
+    const out = [];
+    for (const line of lines(board.size)) {
+      for (const color of bottomColors(board.grid, line.cells, board.colors)) {
+        out.push({ cells: line.cells, line: { kind: line.kind, index: line.index }, color });
+      }
+    }
+    return out;
+  },
+  apply(board, target) {
+    return paintCells(board.grid, target.cells, target.color);
+  },
+  invert(board, rng) {
+    const candidates = uniformLines(board, lines(board.size));
+    if (!candidates.length || board.colors < 2) return null;
+    const line = rng.pick(candidates);
+    const color = board.grid[line.cells[0]];
+    // Every other cell takes a different color; one cell keeps `color`, so it
+    // is (tied for) the least common color in the line.
+    const grid = board.grid.slice();
+    for (const i of line.cells) grid[i] = (color + 1 + rng.int(board.colors - 1)) % board.colors;
+    grid[rng.pick(line.cells)] = color;
+    return { grid, target: { cells: line.cells, line: { kind: line.kind, index: line.index }, color } };
+  },
+  label(target, board) {
+    return `${lineName(target.line)} → ${colorName(board, target.color)}`;
+  },
+};
+
+// ---------------------------------------------------------------- cross
+
+function crossCells(size, center) {
+  return [center].concat(neighbors(size, center)).sort((a, b) => a - b);
+}
+
+export const cross = {
+  id: 'cross',
+  name: 'Cross',
+  text: 'A gem and its four neighbors become the color you choose.',
+  isLuck: false,
+  lockParam: 'color',
+  targets(board, inst) {
+    const out = [];
+    const colors = colorChoices(board, inst);
+    for (let i = 0; i < board.grid.length; i++) {
+      const cells = crossCells(board.size, i);
+      for (const color of colors) out.push({ cells, center: i, color });
+    }
+    return out;
+  },
+  apply(board, target) {
+    return paintCells(board.grid, target.cells, target.color);
+  },
+  invert(board, rng, inst) {
+    const candidates = [];
+    for (let i = 0; i < board.grid.length; i++) {
+      const cells = crossCells(board.size, i);
+      const c = board.grid[i];
+      if (cells.every((k) => board.grid[k] === c) && (inst == null || inst.lockedColor == null || inst.lockedColor === c)) candidates.push({ cells, center: i, color: c });
+    }
+    if (!candidates.length) return null;
+    const target = rng.pick(candidates);
+    return { grid: randomizeCells(board.grid, target.cells, rng, board.colors, target.color), target };
+  },
+  label(target, board) {
+    return `Cross at ${rowOf(board.size, target.center) + 1},${colOf(board.size, target.center) + 1} → ${colorName(board, target.color)}`;
+  },
+};
+
+// ---------------------------------------------------------------- purge
+
+export const purge = {
+  id: 'purge',
+  name: 'Purge',
+  text: 'Every gem of the rarest color becomes the most common color. You break ties.',
+  isLuck: false,
+  lockParam: null,
+  targets(board) {
+    const counts = colorCounts(board.grid, board.colors);
+    const present = colorsPresent(board.grid, board.colors);
+    if (present.length < 2) return [];
+    const most = Math.max(...present.map((c) => counts[c]));
+    const least = Math.min(...present.map((c) => counts[c]));
+    const out = [];
+    for (const from of present) {
+      if (counts[from] !== least) continue;
+      for (const to of present) {
+        if (to === from || counts[to] !== most) continue;
+        out.push({ cells: cellsOfColor(board.grid, from), color: from, color2: to });
+      }
+    }
+    return out;
+  },
+  apply(board, target) {
+    return transmute.apply(board, target);
+  },
+  invert(board, rng) {
+    const counts = colorCounts(board.grid, board.colors);
+    const present = colorsPresent(board.grid, board.colors);
+    const absent = allColors(board).filter((c) => !present.includes(c));
+    if (!absent.length) return null;
+    // `to` must stay (tied for) most common after giving one cell away.
+    const sorted = present.slice().sort((a, b) => counts[b] - counts[a]);
+    const to = sorted[0];
+    const second = sorted.length > 1 ? counts[sorted[1]] : 0;
+    if (counts[to] - 1 < second || counts[to] < 2) return null;
+    const from = rng.pick(absent);
+    const grid = board.grid.slice();
+    grid[rng.pick(cellsOfColor(board.grid, to))] = from;
+    return { grid, target: { cells: cellsOfColor(grid, from), color: from, color2: to } };
+  },
+  label(target, board) {
+    return `${colorName(board, target.color)} → ${colorName(board, target.color2)}`;
   },
 };
 
@@ -715,11 +992,44 @@ export const tumble = {
   },
 };
 
+export const QUADRANT_NAMES = { tl: 'Top-left', tr: 'Top-right', bl: 'Bottom-left', br: 'Bottom-right' };
+
+export function quadrantCells(size, which) {
+  const q = Math.ceil(size / 2);
+  const r0 = which === 'tl' || which === 'tr' ? 0 : size - q;
+  const c0 = which === 'tl' || which === 'bl' ? 0 : size - q;
+  const out = [];
+  for (let r = r0; r < r0 + q; r++) for (let c = c0; c < c0 + q; c++) out.push(idx(size, r, c));
+  return out;
+}
+
+export const quadrants = {
+  id: 'quadrants',
+  name: 'Quadrants',
+  text: 'The gems in one corner quadrant are shuffled among themselves.',
+  isLuck: true,
+  lockParam: null,
+  targets(board) {
+    return Object.keys(QUADRANT_NAMES).map((which) => ({ cells: quadrantCells(board.size, which), quadrant: which }));
+  },
+  apply(board, target, rng) {
+    const values = target.cells.map((i) => board.grid[i]);
+    rng.shuffle(values);
+    const out = board.grid.slice();
+    target.cells.forEach((i, k) => { out[i] = values[k]; });
+    return out;
+  },
+  label(target) {
+    return `Shuffle ${QUADRANT_NAMES[target.quadrant].toLowerCase()}`;
+  },
+};
+
 // ---------------------------------------------------------------- catalog
 
 export const CARDS = {
   rowPaint, colPaint, diagPaint, transmute, colorSwap, flood, spread, stamp,
-  majority, slide, trade, mirror, scatter, wildTransmute, luckyLine, tumble,
+  majority, slide, trade, mirror, groupPaint, corners, rowMirror, colMirror,
+  minority, cross, purge, scatter, wildTransmute, luckyLine, tumble, quadrants,
 };
 
 export const DETERMINISTIC_IDS = Object.values(CARDS).filter((c) => !c.isLuck).map((c) => c.id);

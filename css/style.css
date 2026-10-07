@@ -66,7 +66,7 @@ button { font: inherit; color: inherit; }
 /* ---------- header */
 .hdr {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px var(--gutter) 4px; min-height: 48px;
+  padding: 6px var(--gutter) 2px; min-height: 44px;
 }
 .hdr-btn {
   width: 40px; height: 40px; border: 0; border-radius: 10px;
@@ -77,9 +77,12 @@ button { font: inherit; color: inherit; }
 .hdr-cards, .hdr-par { font-size: 12px; color: var(--muted); }
 
 /* ---------- grid */
-.grid-wrap { padding: 6px var(--gutter); }
+.grid-wrap { padding: 4px var(--gutter); }
 .grid {
-  display: grid; gap: 4px; width: 100%; aspect-ratio: 1 / 1;
+  display: grid; gap: 4px; aspect-ratio: 1 / 1;
+  /* Never taller than what is left after the header, strip and hand. */
+  width: min(100%, calc(100dvh - 318px));
+  margin: 0 auto;
   padding: 6px; border-radius: 16px; background: var(--panel);
 }
 .cell {
@@ -102,9 +105,19 @@ button { font: inherit; color: inherit; }
 .fill-0 { fill: var(--c0); } .fill-1 { fill: var(--c1); } .fill-2 { fill: var(--c2); }
 .fill-3 { fill: var(--c3); } .fill-4 { fill: var(--c4); } .fill-5 { fill: var(--c5); }
 
+/* colors-only mode: flat squares with a buffer, no shapes */
+.swatch { display: block; width: 100%; height: 100%; border-radius: 8px; }
+.cell .swatch { width: 84%; height: 84%; margin: 8%; }
+.pick .swatch { width: 24px; height: 24px; border-radius: 6px; }
+.card .swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; vertical-align: -2px; }
+.bg-0 { background: var(--c0); } .bg-1 { background: var(--c1); } .bg-2 { background: var(--c2); }
+.bg-3 { background: var(--c3); } .bg-4 { background: var(--c4); } .bg-5 { background: var(--c5); }
+body.colors-only .cell { background: #22263a; }
+body.colors-only .cell.ghost .swatch { opacity: 0.55; }
+
 /* ---------- action strip */
 .strip {
-  margin: 4px var(--gutter); padding: 10px 12px; min-height: 108px;
+  margin: 4px var(--gutter); padding: 8px 12px; min-height: 100px;
   border-radius: var(--radius); background: var(--panel);
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -129,13 +142,12 @@ button { font: inherit; color: inherit; }
 /* ---------- hand */
 .hand {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
-  padding: 4px var(--gutter) 12px; margin-top: auto;
+  padding: 4px var(--gutter) 10px; margin-top: auto;
 }
-.hand.cols-6 { grid-template-columns: repeat(6, 1fr); }
 .card {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-height: 64px; padding: 6px 2px; border: 0; border-radius: 10px;
-  background: var(--panel-strong); cursor: pointer; font-size: 11px; line-height: 1.1; text-align: center;
+  min-height: 58px; padding: 5px 2px; border: 0; border-radius: 10px;
+  background: var(--panel-strong); cursor: pointer; font-size: 11.5px; line-height: 1.1; text-align: center;
 }
 .card .icon { font-size: 20px; line-height: 1; }
 .card .icon svg { width: 16px; height: 16px; vertical-align: -2px; }
@@ -180,12 +192,12 @@ button { font: inherit; color: inherit; }
 
 /* Short phones: tighten vertical spacing so the hand stays on screen. */
 @media (max-height: 700px) {
-  .hdr { min-height: 42px; padding-top: 4px; }
+  .hdr { min-height: 40px; padding-top: 4px; }
   .hdr-btn { width: 36px; height: 36px; }
   .grid-wrap { padding: 2px var(--gutter); }
-  .grid { padding: 4px; gap: 3px; }
+  .grid { padding: 4px; gap: 3px; width: min(100%, calc(100dvh - 290px)); }
   .strip { min-height: 92px; margin: 2px var(--gutter); padding: 8px 10px; gap: 6px; }
   .hand { padding-bottom: 6px; gap: 4px; }
-  .card { min-height: 54px; padding: 4px 2px; }
+  .card { min-height: 52px; padding: 4px 2px; }
   .card .icon { font-size: 17px; }
 }

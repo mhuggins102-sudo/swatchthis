@@ -43,9 +43,11 @@ test('Transmute recolors every cell of one color', () => {
   assert.ok(!CARDS.transmute.targets(B).some((x) => x.color === x.color2));
 });
 
-test('Color Swap exchanges two colors everywhere', () => {
-  const t = CARDS.colorSwap.targets(B).find((x) => x.color === 1 && x.color2 === 3);
-  assert.deepEqual(rows(4, CARDS.colorSwap.apply(B, t)), ['0320', '3320', '1102', '2003']);
+test('Color Swap trades the colors of two groups only', () => {
+  // group of 1s at (0,1),(1,0),(1,1) and the group of 3s at (2,0),(2,1)
+  const t = CARDS.colorSwap.targets(B).find((x) => x.cellsA.includes(1) && x.cellsB.includes(8));
+  assert.deepEqual(rows(4, CARDS.colorSwap.apply(B, t)), ['0320', '3320', '1102', '2001']);
+  assert.ok(!CARDS.colorSwap.targets(B).some((x) => B.grid[x.cellsA[0]] === B.grid[x.cellsB[0]]));
 });
 
 test('Flood recolors a connected group only', () => {
@@ -74,11 +76,14 @@ test('Majority Rule offers only the most common colors and paints the line', () 
   assert.deepEqual(tie.map((t) => t.color).sort(), [0, 1]);
 });
 
-test('Slide shifts a line with wraparound', () => {
-  const right = CARDS.slide.targets(B).find((x) => x.line.kind === 'row' && x.line.index === 0 && x.dir === 'right');
-  assert.deepEqual(rows(4, CARDS.slide.apply(B, right)), ['0012', '1120', '3302', '2001']);
-  const up = CARDS.slide.targets(B).find((x) => x.line.kind === 'col' && x.line.index === 0 && x.dir === 'up');
-  assert.deepEqual(rows(4, CARDS.slide.apply(B, up)), ['1120', '3120', '2302', '0001']);
+test('Slide shifts a line by any number of cells with wraparound', () => {
+  const right1 = CARDS.slide.targets(B).find((x) => x.line.kind === 'row' && x.line.index === 0 && x.shift === 1);
+  assert.deepEqual(rows(4, CARDS.slide.apply(B, right1)), ['0012', '1120', '3302', '2001']);
+  const right2 = CARDS.slide.targets(B).find((x) => x.line.kind === 'row' && x.line.index === 0 && x.shift === 2);
+  assert.deepEqual(rows(4, CARDS.slide.apply(B, right2)), ['2001', '1120', '3302', '2001']);
+  const up1 = CARDS.slide.targets(B).find((x) => x.line.kind === 'col' && x.line.index === 0 && x.shift === 3);
+  assert.deepEqual(rows(4, CARDS.slide.apply(B, up1)), ['1120', '3120', '2302', '0001']);
+  assert.equal(CARDS.slide.targets(B).filter((x) => x.line.kind === 'row' && x.line.index === 0).length, 3);
 });
 
 test('Trade swaps two cells of different colors', () => {
@@ -129,13 +134,72 @@ test('Tumble keeps the same multiset in the line', () => {
   assert.deepEqual(t.cells.map((i) => g[i]).sort(), t.cells.map((i) => B.grid[i]).sort());
 });
 
-test('Locked cards only offer their color, and none when it is gone', () => {
+test('Locked cards only offer their color, and stay playable when it has left the board', () => {
   const inst = { uid: 'x', type: 'rowPaint', lockedColor: 3 };
   assert.ok(CARDS.rowPaint.targets(B, inst).every((t) => t.color === 3));
   const noThree = board(['0120', '1120', '0002', '2001']);
-  assert.equal(CARDS.rowPaint.targets(noThree, inst).length, 0);
+  assert.equal(CARDS.rowPaint.targets(noThree, inst).length, 4);
+  // Wild cards may choose any palette color, present or not.
+  assert.equal(CARDS.rowPaint.targets(noThree).length, 16);
   const tr = { uid: 'y', type: 'transmute', lockedColor: 2 };
   assert.ok(CARDS.transmute.targets(B, tr).every((t) => t.color2 === 2));
+});
+
+test('Spread only targets groups of at most 8 cells', () => {
+  const big = board(['0000', '0000', '0001', '2222']);
+  assert.ok(!CARDS.spread.targets(big).some((t) => t.cells.length > 8));
+  assert.ok(CARDS.spread.targets(big).some((t) => t.cells.length === 4));
+});
+
+test('Group Paint recolors every group of the chosen size', () => {
+  // groups: 0s {0,3?}.. use explicit board: 1s group of 3 at (0,1),(1,0),(1,1); 3s group of 2; 2s group of 2 at (0,2),(1,2)
+  // groups of 3 on B: the 1s at (0,1),(1,0),(1,1) and the 0s at (2,2),(3,1),(3,2)
+  const t = CARDS.groupPaint.targets(B).find((x) => x.groupSize === 3 && x.color === 2);
+  assert.deepEqual(t.cells, [1, 4, 5, 10, 13, 14]);
+  assert.deepEqual(rows(4, CARDS.groupPaint.apply(B, t)), ['0220', '2220', '3322', '2221']);
+  assert.ok(!CARDS.groupPaint.targets(B).some((x) => x.groupSize === 5));
+});
+
+test('Corners recolors the four corners', () => {
+  const t = CARDS.corners.targets(B).find((x) => x.color === 3);
+  assert.deepEqual(rows(4, CARDS.corners.apply(B, t)), ['3123', '1120', '3302', '3003']);
+});
+
+test('Row Mirror and Column Mirror reverse one line', () => {
+  const r = CARDS.rowMirror.targets(B).find((x) => x.line.index === 0);
+  assert.deepEqual(rows(4, CARDS.rowMirror.apply(B, r)), ['0210', '1120', '3302', '2001']);
+  const c = CARDS.colMirror.targets(B).find((x) => x.line.index === 3);
+  assert.deepEqual(rows(4, CARDS.colMirror.apply(B, c)), ['0121', '1122', '3300', '2000']);
+});
+
+test('Minority Rule offers only the least common colors and paints the line', () => {
+  // row 0 = 0,1,2,0: least common are 1 and 2
+  const ts = CARDS.minority.targets(B).filter((x) => x.line.kind === 'row' && x.line.index === 0);
+  assert.deepEqual(ts.map((t) => t.color).sort(), [1, 2]);
+  assert.deepEqual(rows(4, CARDS.minority.apply(B, ts.find((t) => t.color === 2))), ['2222', '1120', '3302', '2001']);
+});
+
+test('Cross recolors a cell and its neighbors, clipped at the edge', () => {
+  const t = CARDS.cross.targets(B).find((x) => x.center === 5 && x.color === 3);
+  assert.deepEqual(rows(4, CARDS.cross.apply(B, t)), ['0320', '3330', '3302', '2001']);
+  const corner = CARDS.cross.targets(B).find((x) => x.center === 0 && x.color === 3);
+  assert.deepEqual(corner.cells, [0, 1, 4]);
+});
+
+test('Purge turns the rarest color into the most common one', () => {
+  // counts on B: 0 x5, 1 x4, 2 x4, 3 x3 -> rarest 3, most common 0
+  const ts = CARDS.purge.targets(B);
+  assert.equal(ts.length, 1);
+  assert.deepEqual(rows(4, CARDS.purge.apply(B, ts[0])), ['0120', '1120', '0002', '2001']);
+});
+
+test('Quadrants shuffles the cells of one corner block only', () => {
+  const rng = new Rng(9);
+  const t = CARDS.quadrants.targets(B).find((x) => x.quadrant === 'br');
+  assert.deepEqual(t.cells, [10, 11, 14, 15]);
+  const g = CARDS.quadrants.apply(B, t, rng);
+  assert.deepEqual(t.cells.map((i) => g[i]).sort(), t.cells.map((i) => B.grid[i]).sort());
+  for (let i = 0; i < 16; i++) if (!t.cells.includes(i)) assert.equal(g[i], B.grid[i]);
 });
 
 test('Every target in targets() is accepted by apply without throwing', () => {

@@ -46,3 +46,14 @@ addConfig('med-D', base(TIERS.medium, { k: 8, luck: [1, 2], maxSolverShortcut: 2
 addConfig('med-E', base(TIERS.medium, { k: 8, luck: [1, 1], maxSolverShortcut: 2, lockedRatio: 0.5 }));
 addConfig('hard-A', base(TIERS.hard, { k: 9, luck: [2, 2], maxSolverShortcut: 3 }));
 addConfig('hard-B', base(TIERS.hard, { k: 9, luck: [1, 1], maxSolverShortcut: 3 }));
+
+// --- round 2: pars of 6 (easy) and 7 to 8 (medium, hard), hand 10 everywhere
+addConfig('easy-p6', base(TIERS.easy, { k: 6, maxSolverShortcut: 1 }));
+addConfig('easy-p6b', base(TIERS.easy, { k: 6, maxSolverShortcut: 2 }));
+addConfig('easy-p7', base(TIERS.easy, { k: 7, maxSolverShortcut: 1 }));
+addConfig('med-p8', base(TIERS.medium, { k: 8, maxSolverShortcut: 1 }));
+addConfig('med-p8b', base(TIERS.medium, { k: 8, maxSolverShortcut: 2 }));
+addConfig('med-p9', base(TIERS.medium, { k: 9, maxSolverShortcut: 2 }));
+addConfig('hard-p9', base(TIERS.hard, { k: 9, maxSolverShortcut: 1 }));
+addConfig('hard-p9b', base(TIERS.hard, { k: 9, maxSolverShortcut: 2 }));
+addConfig('hard-p8', base(TIERS.hard, { k: 8, maxSolverShortcut: 1 }));

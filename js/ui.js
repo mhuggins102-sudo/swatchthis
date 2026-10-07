@@ -5,7 +5,7 @@ import {
   startSession, playInSession, undoInSession, canUndo, restartSession, legalTargets,
   previewGrid, isNoop, isWin, isLoss, sessionStars, largestShareOf, newState, applyMove,
 } from './engine.js';
-import { cardDef, instanceName } from './cards.js';
+import { cardDef, instanceName, slideLabel, QUADRANT_NAMES } from './cards.js';
 import { TIERS, TIER_ORDER, COLOR_NAMES } from './tiers.js';
 import { getPuzzle, puzzleFromSeed } from './puzzles.js';
 import { rowOf, colOf } from './grid.js';
@@ -29,7 +29,7 @@ function save(key, value) {
 }
 
 const stats = load(STATS_KEY, {});
-const settings = { sound: false, haptics: true, ...load(SETTINGS_KEY, {}) };
+const settings = { sound: false, haptics: true, colorsOnly: false, ...load(SETTINGS_KEY, {}) };
 
 function tierStats(id) {
   if (!stats[id]) stats[id] = { plays: 0, wins: 0, bestStars: 0 };
@@ -66,11 +66,19 @@ const el = {
 const CARD_ICONS = {
   rowPaint: '▬', colPaint: '▮', diagPaint: '◢', transmute: '⇒', colorSwap: '⇄', flood: '◉',
   spread: '✺', stamp: '▦', majority: '⚖', slide: '⇢', trade: '⤲', mirror: '◧',
-  scatter: '⁂', wildTransmute: '⇝', luckyLine: '⚄', tumble: '⟳',
+  groupPaint: '⁘', corners: '⌜⌟', rowMirror: '↔', colMirror: '↕', minority: '⚖', cross: '✚', purge: '⌫',
+  scatter: '⁂', wildTransmute: '⇝', luckyLine: '⚄', tumble: '⟳', quadrants: '⊞',
 };
 
 function gemSvg(color) {
+  if (settings.colorsOnly) return `<span class="swatch bg-${color}"></span>`;
   return `<svg class="gem"><use href="#gem-${color}" class="fill-${color}"/></svg>`;
+}
+
+// Par shown as cards played (the solver's shortest win); internally par is
+// the leftover count.
+function parCards(session) {
+  return session.puzzle.hand.length - session.puzzle.par;
 }
 
 function cellsKey(cells) {
@@ -94,6 +102,11 @@ function cellsLabel(target, state) {
     return `Diagonal ${target.line.kind === 'down' ? '↘' : '↗'} (${target.cells.length})`;
   }
   if (target.axis) return { left: 'Left half', right: 'Right half', top: 'Top half', bottom: 'Bottom half' }[target.side];
+  if (target.groupSize) return `All groups of ${target.groupSize}`;
+  if (target.quadrant) return `${QUADRANT_NAMES[target.quadrant]} quadrant`;
+  if (target.cellsA) return `Group of ${target.cellsA.length} + group of ${target.cellsB.length}`;
+  if (target.center != null) return `Cross at ${cellName(size, target.center)}`;
+  if (target.cells.length === 4 && app.sel.card != null && app.session.state.hand[app.sel.card].type === 'corners') return 'Corners';
   if (target.cells.length === 4 && app.sel.card != null && app.session.state.hand[app.sel.card].type === 'stamp') {
     return `Block at ${cellName(size, target.cells[0])}`;
   }
@@ -103,7 +116,7 @@ function cellsLabel(target, state) {
 }
 
 function optionLabel(target) {
-  if (target.dir) return { left: '← Left', right: '→ Right', up: '↑ Up', down: '↓ Down' }[target.dir];
+  if (target.shift) return slideLabel(target.line, target.shift, app.session.state.size);
   return cardDef(app.session.state.hand[app.sel.card].type).label(target, boardOf(app.session.state));
 }
 
@@ -198,7 +211,7 @@ function renderStart() {
     const s = tierStats(id);
     const btn = document.createElement('button');
     btn.className = 'tier-btn';
-    btn.innerHTML = `<span class="name">${t.name}</span><span class="meta">${t.size}×${t.size}, ${t.colors} colors, ${t.hand} cards<br>${s.wins} win${s.wins === 1 ? '' : 's'} of ${s.plays} · best ${'★'.repeat(s.bestStars) || '–'}</span>`;
+    btn.innerHTML = `<span class="name">${t.name}</span><span class="meta">${t.size}×${t.size}, ${t.colors} colors<br>${s.wins} win${s.wins === 1 ? '' : 's'} of ${s.plays} · best ${'★'.repeat(s.bestStars) || '–'}</span>`;
     btn.addEventListener('click', () => newGame(id));
     el.tiers.appendChild(btn);
   }
@@ -223,8 +236,9 @@ function renderGame() {
   const won = isWin(state);
 
   el.hdrTier.textContent = tier.name + (app.mode === 'solution' ? ' · solution' : '');
-  el.hdrCards.textContent = `${state.hand.length} card${state.hand.length === 1 ? '' : 's'} left`;
-  el.hdrPar.textContent = `Par: win with ${session.puzzle.par} left`;
+  const played = session.puzzle.hand.length - state.hand.length;
+  el.hdrCards.textContent = `${played} played`;
+  el.hdrPar.textContent = `Par ${parCards(session)}`;
 
   renderGrid(state, res, won);
   renderStrip(state, res, won);
@@ -304,7 +318,7 @@ function renderStrip(state, res, won) {
 
   if (won) {
     add('Solved!', 'strip-title');
-    add(`${'★'.repeat(sessionStars(session))} with ${state.hand.length} card${state.hand.length === 1 ? '' : 's'} left.`);
+    add(`${'★'.repeat(sessionStars(session))} in ${session.puzzle.hand.length - state.hand.length} cards (par ${parCards(session)}).`);
   } else if (isLoss(state)) {
     add('Out of cards', 'strip-title');
     add(`Largest color reached ${Math.round(largestShareOf(state) * 100)}%.`);
@@ -374,7 +388,7 @@ function colorPick(c, key) {
 function renderHand(state, res) {
   const session = app.session;
   const original = session.puzzle.hand;
-  el.hand.classList.toggle('cols-6', original.length > 10);
+  el.hand.style.gridTemplateColumns = `repeat(${Math.ceil(original.length / 2)}, 1fr)`;
   el.hand.innerHTML = '';
   original.forEach((inst) => {
     const idx = state.hand.findIndex((c) => c.uid === inst.uid);
@@ -522,7 +536,7 @@ function showResult() {
     showOverlay(`
       <h2>Solved</h2>
       <div class="stars">${[1, 2, 3].map((n) => `<span class="${n <= stars ? '' : 'off'}">★</span>`).join('')}</div>
-      <p>${state.hand.length} card${state.hand.length === 1 ? '' : 's'} left. Par was ${app.session.puzzle.par}.</p>
+      <p>Solved in ${app.session.puzzle.hand.length - state.hand.length} cards. Par ${parCards(app.session)}.</p>
       <button id="ov-next" class="primary">Next puzzle</button>
       <div class="row"><button id="ov-replay">Replay this board</button><button id="ov-home">Change tier</button></div>`);
     $('ov-next').addEventListener('click', () => newGame(app.tierId));
@@ -584,11 +598,13 @@ function showMenu() {
     <h2>Settings</h2>
     <label>Sound (not yet in this build) <input type="checkbox" id="set-sound" ${settings.sound ? 'checked' : ''}></label>
     <label>Haptics <input type="checkbox" id="set-haptics" ${settings.haptics ? 'checked' : ''}></label>
-    ${p ? `<p class="seed">Puzzle ${p.seed} · source ${app.source} · k ${p.k}, par ${p.par}</p>` : ''}
+    <label>Colors only (no shapes) <input type="checkbox" id="set-colors" ${settings.colorsOnly ? 'checked' : ''}></label>
+    ${p ? `<p class="seed">Puzzle ${p.seed} · source ${app.source} · built from ${p.k} cards, par ${parCards(app.session)}</p>` : ''}
     <div class="row"><button id="menu-new">New puzzle</button><button id="menu-home">Change tier</button></div>
     <button id="menu-close" class="primary">Close</button>`);
   $('set-sound').addEventListener('change', (e) => { settings.sound = e.target.checked; save(SETTINGS_KEY, settings); });
   $('set-haptics').addEventListener('change', (e) => { settings.haptics = e.target.checked; save(SETTINGS_KEY, settings); });
+  $('set-colors').addEventListener('change', (e) => { settings.colorsOnly = e.target.checked; save(SETTINGS_KEY, settings); document.body.classList.toggle('colors-only', settings.colorsOnly); render(); });
   $('menu-new').addEventListener('click', () => newGame(app.tierId));
   $('menu-home').addEventListener('click', goHome);
   $('menu-close').addEventListener('click', hideOverlay);
@@ -609,6 +625,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 (function boot() {
+  document.body.classList.toggle('colors-only', settings.colorsOnly);
   const current = load(CURRENT_KEY, null);
   if (current && current.tierId && TIERS[current.tierId] && current.seed) {
     try {
